@@ -3,13 +3,15 @@ import argparse
 from core.scanner import PortScanner
 from core.analyzer import TrafficAnalyzer
 from core.reporter import EncryptedReporter
+from core.intel import IPIntelligence
 from core.colors import Colors
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-def run_scan(host: str, ports=None, common=True):
+def run_scan(host: str, ports=None, common=True, enrich=False):
     scanner = PortScanner()
+    intel = IPIntelligence()
     print(Colors.CYAN + "=" * 65 + Colors.ENDC)
     print(f"{Colors.BOLD} Bifrost - Network Port Scanner{Colors.ENDC}")
     print(Colors.CYAN + "=" * 65 + Colors.ENDC)
@@ -35,6 +37,25 @@ def run_scan(host: str, ports=None, common=True):
             print(f" {p['port']:<8} {Colors.BOLD}{p['service']:<15}{Colors.ENDC} {p['latency_ms']:<10}ms {banner}")
     else:
         print(f"\n {Colors.WARNING}No open ports detected.{Colors.ENDC}")
+
+    if enrich:
+        print(f"\n{Colors.CYAN}[*]{Colors.ENDC} Enriching target with IP intelligence...")
+        geo = intel.geolocate(host)
+        whois = intel.whois_lookup(host)
+        if geo:
+            tags = intel.get_threat_tags(geo)
+            print(f" {Colors.CYAN}Location:{Colors.ENDC} {geo['city']}, {geo['region']}, {geo['country']}")
+            print(f" {Colors.CYAN}ISP:{Colors.ENDC} {geo['isp']}")
+            print(f" {Colors.CYAN}Org:{Colors.ENDC} {geo['org']}")
+            print(f" {Colors.CYAN}AS:{Colors.ENDC} {geo['as']}")
+            if tags:
+                print(f" {Colors.WARNING}Threat Tags:{Colors.ENDC} {', '.join(tags)}")
+            else:
+                print(f" {Colors.GREEN}Threat Tags:{Colors.ENDC} None detected")
+        if whois:
+            print(f" {Colors.CYAN}Whois:{Colors.ENDC} {whois.get('name', host)} ({whois.get('country', 'N/A')})")
+        result["geo"] = geo
+        result["whois"] = whois
 
     print(Colors.CYAN + "=" * 65 + Colors.ENDC)
     return result
@@ -64,12 +85,12 @@ def run_analyze():
     print(Colors.CYAN + "=" * 65 + Colors.ENDC)
     return result
 
-def run_full(host: str = "127.0.0.1", encrypt_password=None):
+def run_full(host: str = "127.0.0.1", encrypt_password=None, enrich=False):
     print(Colors.CYAN + "=" * 65 + Colors.ENDC)
     print(f"{Colors.BOLD} Bifrost - Full Network Security Analysis{Colors.ENDC}")
     print(Colors.CYAN + "=" * 65 + Colors.ENDC)
 
-    scan = run_scan(host)
+    scan = run_scan(host, enrich=enrich)
     analysis = run_analyze()
 
     reporter = EncryptedReporter()
@@ -90,21 +111,23 @@ def main():
     scan_parser = subparsers.add_parser("scan", help="Scan target host for open ports")
     scan_parser.add_argument("host", help="Target host IP or hostname")
     scan_parser.add_argument("--ports", nargs="+", type=int, help="Specific ports to scan")
+    scan_parser.add_argument("--enrich", action="store_true", help="Enrich results with IP geolocation and Whois data")
 
     subparsers.add_parser("analyze", help="Analyze live network traffic")
 
     full_parser = subparsers.add_parser("full", help="Run full scan + analysis + report")
     full_parser.add_argument("--host", default="127.0.0.1")
     full_parser.add_argument("--password", help="Encrypt report with this password")
+    full_parser.add_argument("--enrich", action="store_true", help="Enrich results with IP geolocation and Whois data")
 
     args = parser.parse_args()
 
     if args.command == "scan":
-        run_scan(args.host, ports=args.ports)
+        run_scan(args.host, ports=args.ports, enrich=args.enrich)
     elif args.command == "analyze":
         run_analyze()
     elif args.command == "full":
-        run_full(args.host, encrypt_password=args.password)
+        run_full(args.host, encrypt_password=args.password, enrich=args.enrich)
     else:
         run_full("127.0.0.1")
 
