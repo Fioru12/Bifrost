@@ -1,19 +1,19 @@
 import sys
 import argparse
-import json
 from core.scanner import PortScanner
 from core.analyzer import TrafficAnalyzer
 from core.reporter import EncryptedReporter
+from core.colors import Colors
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
 def run_scan(host: str, ports=None, common=True):
     scanner = PortScanner()
-    print("=" * 65)
-    print(" Bifrost - Network Port Scanner")
-    print("=" * 65)
-    print(f"[*] Target: {host}")
+    print(Colors.CYAN + "=" * 65 + Colors.ENDC)
+    print(f"{Colors.BOLD} Bifrost - Network Port Scanner{Colors.ENDC}")
+    print(Colors.CYAN + "=" * 65 + Colors.ENDC)
+    print(f"{Colors.CYAN}[*]{Colors.ENDC} Target: {host}")
 
     if common:
         result = scanner.scan_common(host)
@@ -22,64 +22,65 @@ def run_scan(host: str, ports=None, common=True):
     else:
         result = scanner.scan_common(host)
 
-    print(f"[*] Ports scanned: {result['ports_scanned']}")
-    print(f"[*] Open ports: {result['open_count']}")
-    print(f"[*] Scan duration: {result['scan_duration_sec']}s")
+    print(f"{Colors.CYAN}[*]{Colors.ENDC} Ports scanned: {result['ports_scanned']}")
+    print(f"{Colors.GREEN}[*]{Colors.ENDC} Open ports: {Colors.BOLD}{result['open_count']}{Colors.ENDC}")
+    print(f"{Colors.CYAN}[*]{Colors.ENDC} Scan duration: {result['scan_duration_sec']}s")
 
     if result["open_ports"]:
-        print("\n Open Ports:")
+        print(f"\n {Colors.GREEN}Open Ports:{Colors.ENDC}")
         print(f" {'PORT':<8} {'SERVICE':<15} {'LATENCY':<10} {'BANNER'}")
         print(f" {'-'*6:<8} {'-'*12:<15} {'-'*8:<10} {'-'*30}")
         for p in result["open_ports"]:
             banner = (p.get("banner") or "-")[:40]
-            print(f" {p['port']:<8} {p['service']:<15} {p['latency_ms']:<10}ms {banner}")
+            print(f" {p['port']:<8} {Colors.BOLD}{p['service']:<15}{Colors.ENDC} {p['latency_ms']:<10}ms {banner}")
     else:
-        print("\n No open ports detected.")
+        print(f"\n {Colors.WARNING}No open ports detected.{Colors.ENDC}")
 
-    print("=" * 65)
+    print(Colors.CYAN + "=" * 65 + Colors.ENDC)
     return result
 
 def run_analyze():
     ta = TrafficAnalyzer()
-    print("=" * 65)
-    print(" Bifrost - Live Traffic Analyzer")
-    print("=" * 65)
+    print(Colors.CYAN + "=" * 65 + Colors.ENDC)
+    print(f"{Colors.BOLD} Bifrost - Live Traffic Analyzer{Colors.ENDC}")
+    print(Colors.CYAN + "=" * 65 + Colors.ENDC)
 
     result = ta.run_analysis()
     snap = result["snapshot"]
 
-    print(f"[*] Snapshot time: {snap['timestamp']}")
-    print(f"[*] Total connections: {snap['total_connections']}")
-    print(f"[*] Unique remote IPs: {len(snap.get('remote_ips', {}))}")
-    print(f"[*] Anomalies detected: {result['anomaly_count']}")
+    print(f"{Colors.CYAN}[*]{Colors.ENDC} Snapshot time: {snap['timestamp']}")
+    print(f"{Colors.CYAN}[*]{Colors.ENDC} Total connections: {snap['total_connections']}")
+    print(f"{Colors.CYAN}[*]{Colors.ENDC} Unique remote IPs: {len(snap.get('remote_ips', {}))}")
+    print(f"{Colors.CYAN}[*]{Colors.ENDC} Anomalies detected: {Colors.BOLD}{result['anomaly_count']}{Colors.ENDC}")
 
     if result["anomalies"]:
-        print("\n Anomalies Found:")
+        print(f"\n {Colors.FAIL}Anomalies Found:{Colors.ENDC}")
         for a in result["anomalies"]:
-            print(f"  [{a['severity']}] {a['type']}: {a['details']}")
+            sev_color = Colors.FAIL if a['severity'] == 'HIGH' else Colors.WARNING
+            print(f"  {sev_color}[{a['severity']}]{Colors.ENDC} {a['type']}: {a['details']}")
     else:
-        print("\n No anomalies detected.")
+        print(f"\n {Colors.GREEN}No anomalies detected.{Colors.ENDC}")
 
-    print("=" * 65)
+    print(Colors.CYAN + "=" * 65 + Colors.ENDC)
     return result
 
 def run_full(host: str = "127.0.0.1", encrypt_password=None):
-    print("=" * 65)
-    print(" Bifrost - Full Network Security Analysis")
-    print("=" * 65)
+    print(Colors.CYAN + "=" * 65 + Colors.ENDC)
+    print(f"{Colors.BOLD} Bifrost - Full Network Security Analysis{Colors.ENDC}")
+    print(Colors.CYAN + "=" * 65 + Colors.ENDC)
 
     scan = run_scan(host)
     analysis = run_analyze()
 
     reporter = EncryptedReporter()
-    print("\n[*] Generating encrypted network security report...")
+    print(f"\n{Colors.CYAN}[*]{Colors.ENDC} Generating encrypted network security report...")
     path = reporter.generate_report(
         scan_result=scan,
         analysis_result=analysis,
         encrypt_password=encrypt_password
     )
-    print(f"[SUCCESS] Report saved at: {path}")
-    print("=" * 65)
+    print(f"{Colors.GREEN}[SUCCESS]{Colors.ENDC} Report saved at: {path}")
+    print(Colors.CYAN + "=" * 65 + Colors.ENDC)
     return scan, analysis
 
 def main():
