@@ -4,10 +4,36 @@ from core.scanner import PortScanner
 from core.analyzer import TrafficAnalyzer
 from core.reporter import EncryptedReporter
 from core.intel import IPIntelligence
+from core.discovery import LANDiscovery
 from core.colors import Colors
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
+
+def run_discover(subnet: str = "192.168.1.0/24"):
+    discovery = LANDiscovery()
+    print(Colors.CYAN + "=" * 65 + Colors.ENDC)
+    print(f"{Colors.BOLD} Bifrost - LAN Asset Discovery & Network Inventory{Colors.ENDC}")
+    print(Colors.CYAN + "=" * 65 + Colors.ENDC)
+    print(f"{Colors.CYAN}[*]{Colors.ENDC} Sweeping Subnet: {subnet}")
+
+    res = discovery.sweep_subnet(subnet)
+    print(f"{Colors.CYAN}[*]{Colors.ENDC} Total IPs scanned: {res['total_scanned']}")
+    print(f"{Colors.GREEN}[*]{Colors.ENDC} Live hosts found: {Colors.BOLD}{res['live_hosts_count']}{Colors.ENDC}")
+    print(f"{Colors.CYAN}[*]{Colors.ENDC} Scan duration: {res['scan_duration_sec']}s")
+
+    if res["hosts"]:
+        print(f"\n {Colors.GREEN}Discovered Assets:{Colors.ENDC}")
+        print(f" {'IP ADDRESS':<16} {'HOSTNAME':<22} {'DEVICE TYPE':<26} {'OPEN PORTS'}")
+        print(f" {'-'*14:<16} {'-'*20:<22} {'-'*24:<26} {'-'*15}")
+        for h in res["hosts"]:
+            ports_str = ",".join(map(str, h["open_ports"])) if h["open_ports"] else "None"
+            print(f" {h['ip']:<16} {Colors.BOLD}{h['hostname']:<22}{Colors.ENDC} {h['device_type']:<26} {ports_str}")
+    else:
+        print(f"\n {Colors.WARNING}No active hosts discovered on subnet {subnet}.{Colors.ENDC}")
+
+    print(Colors.CYAN + "=" * 65 + Colors.ENDC)
+    return res
 
 def run_scan(host: str, ports=None, common=True, enrich=False):
     scanner = PortScanner()
@@ -113,6 +139,9 @@ def main():
     scan_parser.add_argument("--ports", nargs="+", type=int, help="Specific ports to scan")
     scan_parser.add_argument("--enrich", action="store_true", help="Enrich results with IP geolocation and Whois data")
 
+    disc_parser = subparsers.add_parser("discover", help="Perform LAN asset discovery sweep")
+    disc_parser.add_argument("subnet", default="192.168.1.0/24", nargs="?", help="Subnet CIDR (e.g. 192.168.1.0/24)")
+
     subparsers.add_parser("analyze", help="Analyze live network traffic")
 
     full_parser = subparsers.add_parser("full", help="Run full scan + analysis + report")
@@ -124,6 +153,8 @@ def main():
 
     if args.command == "scan":
         run_scan(args.host, ports=args.ports, enrich=args.enrich)
+    elif args.command == "discover":
+        run_discover(args.subnet)
     elif args.command == "analyze":
         run_analyze()
     elif args.command == "full":

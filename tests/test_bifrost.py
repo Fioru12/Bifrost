@@ -107,3 +107,48 @@ def test_reporter_encrypted_file():
         os.remove(path)
     if os.path.exists(enc_path):
         os.remove(enc_path)
+
+
+from core.discovery import LANDiscovery
+
+def test_guess_device_type_windows():
+    d = LANDiscovery()
+    assert d._guess_device_type([445, 135]) == "Windows Server / Workstation"
+
+def test_guess_device_type_linux():
+    d = LANDiscovery()
+    assert d._guess_device_type([22]) == "Linux / Unix Server"
+
+def test_guess_device_type_rdp():
+    d = LANDiscovery()
+    assert d._guess_device_type([3389]) == "Windows RDP Host"
+
+def test_guess_device_type_web():
+    d = LANDiscovery()
+    assert d._guess_device_type([80, 443]) == "Web Server / Gateway"
+
+def test_guess_device_type_iot():
+    d = LANDiscovery()
+    assert d._guess_device_type([53]) == "Network Device / IoT"
+
+def test_sweep_invalid_subnet():
+    d = LANDiscovery()
+    result = d.sweep_subnet("not_a_subnet")
+    assert "error" in result
+    assert result["hosts"] == []
+
+def test_sweep_small_subnet():
+    d = LANDiscovery(timeout=0.3)
+    result = d.sweep_subnet("127.0.0.0/30", max_workers=5)
+    assert "subnet" in result
+    assert "total_scanned" in result
+    assert "live_hosts_count" in result
+    assert "scan_duration_sec" in result
+    assert isinstance(result["hosts"], list)
+
+def test_check_host_localhost():
+    d = LANDiscovery(timeout=0.5)
+    # localhost typically has no open probe ports in CI, result may be None
+    res = d._check_host("127.0.0.1")
+    # Just verify it doesn't crash — result is None or a dict
+    assert res is None or isinstance(res, dict)
