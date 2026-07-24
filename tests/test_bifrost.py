@@ -148,7 +148,24 @@ def test_sweep_small_subnet():
 
 def test_check_host_localhost():
     d = LANDiscovery(timeout=0.5)
-    # localhost typically has no open probe ports in CI, result may be None
     res = d._check_host("127.0.0.1")
-    # Just verify it doesn't crash — result is None or a dict
     assert res is None or isinstance(res, dict)
+
+def test_os_from_ttl_linux():
+    d = LANDiscovery()
+    assert "Linux" in d._get_os_from_ttl(64)
+
+def test_os_from_ttl_windows():
+    d = LANDiscovery()
+    assert "Windows" in d._get_os_from_ttl(128)
+
+def test_os_from_ttl_network_device():
+    d = LANDiscovery()
+    assert "Router" in d._get_os_from_ttl(1)
+
+def test_ttl_os_map_coverage():
+    d = LANDiscovery()
+    for ttl_val in [1, 3, 16, 32, 64, 128, 200]:
+        result = d._get_os_from_ttl(ttl_val)
+        assert isinstance(result, str)
+        assert len(result) > 0

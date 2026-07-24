@@ -24,11 +24,17 @@ def run_discover(subnet: str = "192.168.1.0/24"):
 
     if res["hosts"]:
         print(f"\n {Colors.GREEN}Discovered Assets:{Colors.ENDC}")
-        print(f" {'IP ADDRESS':<16} {'HOSTNAME':<22} {'DEVICE TYPE':<26} {'OPEN PORTS'}")
-        print(f" {'-'*14:<16} {'-'*20:<22} {'-'*24:<26} {'-'*15}")
+        print(f" {'IP ADDRESS':<16} {'HOSTNAME':<22} {'OS GUESS':<24} {'DEVICE TYPE':<26} {'OPEN PORTS'}")
+        print(f" {'-'*14:<16} {'-'*20:<22} {'-'*22:<24} {'-'*24:<26} {'-'*15}")
         for h in res["hosts"]:
             ports_str = ",".join(map(str, h["open_ports"])) if h["open_ports"] else "None"
-            print(f" {h['ip']:<16} {Colors.BOLD}{h['hostname']:<22}{Colors.ENDC} {h['device_type']:<26} {ports_str}")
+            os_guess = h.get("os_guess", "Unknown")
+            print(f" {h['ip']:<16} {Colors.BOLD}{h['hostname']:<22}{Colors.ENDC} {os_guess:<24} {h['device_type']:<26} {ports_str}")
+        print()
+        for h in res["hosts"]:
+            ports_str = ",".join(map(str, h["open_ports"])) if h["open_ports"] else "None"
+            os_guess = h.get("os_guess", "Unknown")
+            print(f"{h['ip']} | {h['hostname']} | {os_guess} | {h['device_type']} | {ports_str} | UP")
     else:
         print(f"\n {Colors.WARNING}No active hosts discovered on subnet {subnet}.{Colors.ENDC}")
 

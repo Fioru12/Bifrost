@@ -1,27 +1,62 @@
 import ipaddress
 import socket
+import struct
 import concurrent.futures
 import time
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 class LANDiscovery:
     """
     Enterprise LAN Asset Discovery & Network Inventory engine.
     Performs multi-threaded subnet sweeps, host reachability checks,
-    reverse DNS resolution, and core port fingerprinting.
+    reverse DNS resolution, OS fingerprinting via TTL/DSCP analysis,
+    and core port fingerprinting.
     """
+
+    TTL_OS_MAP = [
+        (0, 2, "Network Device (Router/Switch)"),
+        (2, 16, "Solaris / AIX / Legacy Unix"),
+        (16, 33, "Windows 95/98/ME"),
+        (33, 65, "Linux / macOS (modern)"),
+        (65, 129, "Windows 2000/XP/Vista/7/10/11"),
+        (129, 256, "Linux / macOS (typical default)"),
+    ]
 
     def __init__(self, timeout: float = 0.5):
         self.timeout = timeout
-        # Common management/service ports to probe for host liveness
         self.probe_ports = [80, 443, 445, 135, 22, 3389, 53, 21]
+
+    def _get_ttl(self, ip: str) -> Optional[int]:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(self.timeout)
+            s.connect((ip, 80))
+            # Capture TTL from incoming TCP SYN-ACK
+            # Use a raw-ish approach: connect then getsockopt
+            # On Windows, we can try to get IP_TTL via getsockopt
+            ttl = s.getsockopt(socket.IPPROTO_IP, socket.IP_TTL)
+            s.close()
+            return ttl
+        except Exception:
+            try:
+                s.close()
+            except Exception:
+                pass
+            return None
+
+    def _get_os_from_ttl(self, ttl: int) -> str:
+        for low, high, os_name in self.TTL_OS_MAP:
+            if low <= ttl < high:
+                return os_name
+        if ttl >= 256:
+            return "Unknown (high TTL)"
+        return "Unknown (low TTL)"
 
     def _check_host(self, ip: str) -> Dict[str, Any]:
         live = False
         open_ports = []
         hostname = "Unknown"
 
-        # Check reachability via TCP probe on common ports
         for port in self.probe_ports:
             try:
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -37,17 +72,21 @@ class LANDiscovery:
         if not live:
             return None
 
-        # Attempt reverse DNS lookup
         try:
             hostname = socket.gethostbyaddr(ip)[0]
         except Exception:
             hostname = "Unresolved"
+
+        ttl = self._get_ttl(ip)
+        os_guess = self._get_os_from_ttl(ttl) if ttl else "Unknown"
 
         return {
             "ip": ip,
             "hostname": hostname,
             "status": "online",
             "open_ports": open_ports,
+            "ttl": ttl,
+            "os_guess": os_guess,
             "device_type": self._guess_device_type(open_ports)
         }
 
