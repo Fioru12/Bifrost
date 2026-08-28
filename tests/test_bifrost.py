@@ -91,6 +91,24 @@ def test_reporter_encryption():
     with pytest.raises(InvalidToken):
         reporter.decrypt_content(encrypted, "wrong_password")
 
+def test_reporter_encryption_uses_a_random_salt_per_call():
+    """Trovato in revisione: il salt era una costante hardcoded
+    (b"bifrost-salt-v1"), che vanifica lo scopo del salting -- due report
+    cifrati con la stessa password producevano chiavi derivate identiche,
+    esponendo tutti i .enc a un singolo attacco a dizionario/rainbow-table
+    invece di uno per file."""
+    reporter = EncryptedReporter(output_dir="test_reports")
+    content = "Top secret network report"
+    password = "my_secure_password"
+
+    first = reporter.encrypt_content(content, password)
+    second = reporter.encrypt_content(content, password)
+
+    assert first[:EncryptedReporter.SALT_SIZE] != second[:EncryptedReporter.SALT_SIZE]
+    assert first != second
+    assert reporter.decrypt_content(first, password) == content
+    assert reporter.decrypt_content(second, password) == content
+
 def test_reporter_encrypted_file():
     reporter = EncryptedReporter(output_dir="test_reports")
     path = reporter.generate_report(

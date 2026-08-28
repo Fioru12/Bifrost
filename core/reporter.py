@@ -20,8 +20,9 @@ class EncryptedReporter:
         self.output_dir = output_dir
         os.makedirs(self.output_dir, exist_ok=True)
 
-    def _derive_key(self, password: str) -> bytes:
-        salt = b"bifrost-salt-v1"
+    SALT_SIZE = 16
+
+    def _derive_key(self, password: str, salt: bytes) -> bytes:
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
@@ -31,14 +32,19 @@ class EncryptedReporter:
         return base64.urlsafe_b64encode(kdf.derive(password.encode()))
 
     def encrypt_content(self, content: str, password: str) -> bytes:
-        key = self._derive_key(password)
+        salt = os.urandom(self.SALT_SIZE)
+        key = self._derive_key(password, salt)
         f = Fernet(key)
-        return f.encrypt(content.encode())
+        # Il salt precede il ciphertext: serve a decrypt_content per
+        # rideriverare la stessa chiave, e non essendo segreto puo'
+        # viaggiare in chiaro nel file .enc.
+        return salt + f.encrypt(content.encode())
 
     def decrypt_content(self, encrypted: bytes, password: str) -> str:
-        key = self._derive_key(password)
+        salt, ciphertext = encrypted[:self.SALT_SIZE], encrypted[self.SALT_SIZE:]
+        key = self._derive_key(password, salt)
         f = Fernet(key)
-        return f.decrypt(encrypted).decode()
+        return f.decrypt(ciphertext).decode()
 
     def generate_report(
         self,
