@@ -9,8 +9,12 @@ class LANDiscovery:
     """
     Enterprise LAN Asset Discovery & Network Inventory engine.
     Performs multi-threaded subnet sweeps, host reachability checks,
-    reverse DNS resolution, OS fingerprinting via TTL/DSCP analysis,
-    and core port fingerprinting.
+    reverse DNS resolution, and core port fingerprinting.
+
+    NOTE on "OS fingerprinting": this class does NOT do real remote OS
+    fingerprinting. See the docstring of `_get_local_send_ttl` below for
+    why, and treat any `os_guess` value in the returned host dict as a
+    rough, unreliable heuristic rather than a real detection result.
     """
 
     TTL_OS_MAP = [
@@ -26,14 +30,31 @@ class LANDiscovery:
         self.timeout = timeout
         self.probe_ports = [80, 443, 445, 135, 22, 3389, 53, 21]
 
-    def _get_ttl(self, ip: str) -> Optional[int]:
+    def _get_local_send_ttl(self, ip: str) -> Optional[int]:
+        """Return the LOCAL/OUTBOUND IP_TTL socket option for a TCP socket
+        connected to `ip`.
+
+        IMPORTANT LIMITATION: `getsockopt(IPPROTO_IP, IP_TTL)` on a connected
+        socket reports the TTL this machine's OS puts on OUTGOING packets
+        (its own default, e.g. 64 or 128) -- NOT the TTL that was present on
+        the packet actually RECEIVED from the remote target. Reading the
+        received TTL requires inspecting the IP header of the reply itself
+        (e.g. via a raw socket / IP_RECVTTL, or a packet-crafting library
+        such as scapy), which in turn requires raw-socket privileges
+        (root/Administrator) on essentially every OS.
+
+        Because this tool intentionally avoids requiring elevated
+        privileges, it cannot observe the remote TTL and therefore cannot
+        do real passive OS fingerprinting via TTL. This method is kept only
+        to preserve the "typical value for TCP sockets on this local host"
+        heuristic bucket-mapping in `_get_os_from_ttl`/`TTL_OS_MAP`, and its
+        result MUST be presented to users as unreliable, not as a genuine
+        remote OS guess (see `_check_host`).
+        """
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.settimeout(self.timeout)
             s.connect((ip, 80))
-            # Capture TTL from incoming TCP SYN-ACK
-            # Use a raw-ish approach: connect then getsockopt
-            # On Windows, we can try to get IP_TTL via getsockopt
             ttl = s.getsockopt(socket.IPPROTO_IP, socket.IP_TTL)
             s.close()
             return ttl
@@ -77,16 +98,23 @@ class LANDiscovery:
         except Exception:
             hostname = "Unresolved"
 
-        ttl = self._get_ttl(ip)
-        os_guess = self._get_os_from_ttl(ttl) if ttl else "Unknown"
+        local_ttl = self._get_local_send_ttl(ip)
+        if local_ttl:
+            # This is a heuristic guess based on OUR OWN outbound TTL, not
+            # the target's -- see _get_local_send_ttl docstring. It is not
+            # a reliable remote OS fingerprint and must be labeled as such.
+            os_guess = f"{self._get_os_from_ttl(local_ttl)} (unreliable: local TTL, not remote)"
+        else:
+            os_guess = "Unknown"
 
         return {
             "ip": ip,
             "hostname": hostname,
             "status": "online",
             "open_ports": open_ports,
-            "ttl": ttl,
+            "local_ttl": local_ttl,
             "os_guess": os_guess,
+            "os_guess_reliable": False,
             "device_type": self._guess_device_type(open_ports)
         }
 
