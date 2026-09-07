@@ -43,6 +43,8 @@ def run_scan(host: str, ports=None, common=True, enrich=False):
     print(Colors.CYAN + "=" * 65 + Colors.ENDC)
     print(f"{Colors.BOLD} Bifrost - Network Port Scanner{Colors.ENDC}")
     print(Colors.CYAN + "=" * 65 + Colors.ENDC)
+    print(f"{Colors.YELLOW}[AVVISO LEGALE]{Colors.ENDC} L'operatore certifica di essere proprietario o formalmente")
+    print(f"{Colors.YELLOW}[AVVISO LEGALE]{Colors.ENDC} autorizzato a scansionare il target (art. 615-ter c.p.).")
     print(f"{Colors.CYAN}[*]{Colors.ENDC} Target: {host}")
 
     if common:
