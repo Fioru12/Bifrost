@@ -156,7 +156,7 @@ def main():
     args = parser.parse_args()
 
     if args.command == "scan":
-        run_scan(args.host, ports=args.ports, enrich=args.enrich)
+        run_scan(args.host, ports=args.ports, common=not args.ports, enrich=args.enrich)
     elif args.command == "discover":
         run_discover(args.subnet)
     elif args.command == "analyze":
