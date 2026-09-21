@@ -1,6 +1,5 @@
 import ipaddress
 import socket
-import struct
 import concurrent.futures
 import time
 from typing import Dict, Any, List, Optional

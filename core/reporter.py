@@ -1,9 +1,7 @@
 import os
-import json
 import base64
-import hashlib
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
@@ -57,7 +55,7 @@ class EncryptedReporter:
             "# Bifrost Network Security Report",
             "",
             f"**Generated:** {timestamp}",
-            f"**Engine:** Bifrost Network Telemetry & Port Analysis",
+            "**Engine:** Bifrost Network Telemetry & Port Analysis",
             "",
             "---",
             ""

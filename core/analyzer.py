@@ -2,7 +2,7 @@ import time
 import ipaddress
 import psutil
 from typing import List, Dict, Any, Optional, Tuple
-from collections import Counter, defaultdict
+from collections import Counter
 
 class TrafficAnalyzer:
     """
