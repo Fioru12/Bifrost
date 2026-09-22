@@ -37,7 +37,7 @@ def run_discover(subnet: str = "192.168.1.0/24"):
     print(Colors.CYAN + "=" * 65 + Colors.ENDC)
     return res
 
-def run_scan(host: str, ports=None, common=True, enrich=False):
+def run_scan(host: str, ports=None, common=True, enrich=False, nvd=False):
     scanner = PortScanner()
     intel = IPIntelligence()
     print(Colors.CYAN + "=" * 65 + Colors.ENDC)
@@ -87,6 +87,25 @@ def run_scan(host: str, ports=None, common=True, enrich=False):
         result["geo"] = geo
         result["whois"] = whois
 
+        vulns = []
+        for p in result.get("open_ports", []):
+            found = intel.vulnerability_lookup(p.get("banner", ""))
+            for v in found:
+                vulns.append({"port": p["port"], **v})
+        if nvd and vulns:
+            ports = [v["port"] for v in vulns]
+            bare = [{k: x for k, x in v.items() if k != "port"} for v in vulns]
+            vulns = [{**e, "port": port} for e, port in
+                     zip(intel.enrich_vulns_with_nvd(bare), ports)]
+        if vulns:
+            print(f"\n {Colors.FAIL}Vulnerabilities (banner correlation):{Colors.ENDC}")
+            for v in vulns:
+                extra = f" CVSS:{v['cvss']}" if v.get("cvss") is not None else ""
+                print(f"  [{v['severity']}] port {v['port']}: {v['cve']} - {v['description']}{extra}")
+        else:
+            print(f"\n {Colors.GREEN}Vulnerabilities:{Colors.ENDC} none matched known signatures")
+        result["vulnerabilities"] = vulns
+
     print(Colors.CYAN + "=" * 65 + Colors.ENDC)
     return result
 
@@ -115,12 +134,12 @@ def run_analyze():
     print(Colors.CYAN + "=" * 65 + Colors.ENDC)
     return result
 
-def run_full(host: str = "127.0.0.1", encrypt_password=None, enrich=False):
+def run_full(host: str = "127.0.0.1", encrypt_password=None, enrich=False, nvd=False):
     print(Colors.CYAN + "=" * 65 + Colors.ENDC)
     print(f"{Colors.BOLD} Bifrost - Full Network Security Analysis{Colors.ENDC}")
     print(Colors.CYAN + "=" * 65 + Colors.ENDC)
 
-    scan = run_scan(host, enrich=enrich)
+    scan = run_scan(host, enrich=enrich, nvd=nvd)
     analysis = run_analyze()
 
     reporter = EncryptedReporter()
@@ -142,6 +161,7 @@ def main():
     scan_parser.add_argument("host", help="Target host IP or hostname")
     scan_parser.add_argument("--ports", nargs="+", type=int, help="Specific ports to scan")
     scan_parser.add_argument("--enrich", action="store_true", help="Enrich results with IP geolocation and Whois data")
+    scan_parser.add_argument("--nvd", action="store_true", help="Arricchisci i CVE con CVSS live da NVD (richiede rete; best-effort)")
 
     disc_parser = subparsers.add_parser("discover", help="Perform LAN asset discovery sweep")
     disc_parser.add_argument("subnet", default="192.168.1.0/24", nargs="?", help="Subnet CIDR (e.g. 192.168.1.0/24)")
@@ -152,17 +172,18 @@ def main():
     full_parser.add_argument("--host", default="127.0.0.1")
     full_parser.add_argument("--password", help="Encrypt report with this password")
     full_parser.add_argument("--enrich", action="store_true", help="Enrich results with IP geolocation and Whois data")
+    full_parser.add_argument("--nvd", action="store_true", help="Arricchisci i CVE con CVSS live da NVD (richiede rete; best-effort)")
 
     args = parser.parse_args()
 
     if args.command == "scan":
-        run_scan(args.host, ports=args.ports, common=not args.ports, enrich=args.enrich)
+        run_scan(args.host, ports=args.ports, common=not args.ports, enrich=args.enrich, nvd=args.nvd)
     elif args.command == "discover":
         run_discover(args.subnet)
     elif args.command == "analyze":
         run_analyze()
     elif args.command == "full":
-        run_full(args.host, encrypt_password=args.password, enrich=args.enrich)
+        run_full(args.host, encrypt_password=args.password, enrich=args.enrich, nvd=args.nvd)
     else:
         run_full("127.0.0.1")
 
